@@ -1,0 +1,50 @@
+# Toronto Open Data (CKAN) sources for mobility ingestion.
+# Portal: https://open.toronto.ca/
+
+ckan_base_url: "https://ckan0.cf.opendata.inter.prod-toronto.ca/api/3/action/"
+
+datasets:
+  travel_times_bluetooth:
+    package_id: travel-times-bluetooth
+    description: Citywide Bluetooth/WiFi 5-minute travel times and route geometries
+    resources:
+      - name: bluetooth-routes-wgs84
+        kind: geo
+      - name: travel-time-readme
+        kind: docs
+      - name: travel-time-2014
+        kind: travel_times
+        year: 2014
+      - name: travel-time-2015
+        kind: travel_times
+        year: 2015
+      - name: travel-time-2016
+        kind: travel_times
+        year: 2016
+      - name: travel-time-2017
+        kind: travel_times
+        year: 2017
+
+  king_st_bluetooth_segments:
+    package_id: king-st-transit-pilot-bluetooth-travel-time-segments
+    description: King Street pilot Bluetooth segment geometries
+    resources:
+      - name: bluetooth-travel-time-segments-geojson
+        kind: geo
+      - name: bluetooth-travel-time-segments-wgs84
+        kind: geo
+      - name: bluetooth-travel-time-segments-readme
+        kind: docs
+
+  king_st_bluetooth_travel_times:
+    package_id: king-st-transit-pilot-detailed-bluetooth-travel-time
+    description: King Street pilot detailed 5-minute Bluetooth travel times
+    resources:
+      - name: detailed-bluetooth-travel-time-2017
+        kind: travel_times
+        year: 2017
+      - name: detailed-bluetooth-travel-time-2018
+        kind: travel_times
+        year: 2018
+      - name: detailed-bluetooth-travel-time-readme
+        kind: docs

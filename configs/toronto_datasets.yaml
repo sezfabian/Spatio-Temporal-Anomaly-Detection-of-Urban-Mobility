@@ -48,3 +48,20 @@ datasets:
         year: 2018
       - name: detailed-bluetooth-travel-time-readme
         kind: docs
+
+# Environment and Climate Change Canada historical climate.
+# Portal: https://climate.weather.gc.ca/
+# Station page (Toronto City): climate_id=6158355
+weather:
+  provider: eccc
+  dataset_key: weather_toronto_city
+  description: Hourly observations for TORONTO CITY (Climate ID 6158355)
+  bulk_data_url: "https://climate.weather.gc.ca/climate_data/bulk_data_e.html"
+  climate_id: "6158355"
+  station_name: TORONTO CITY
+  province: ON
+  timeframe: 1  # 1 = hourly, 2 = daily, 3 = monthly
+  # Aligned with citywide Bluetooth travel-time coverage.
+  start_year: 2014
+  end_year: 2017
+  format: csv

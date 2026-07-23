@@ -36,6 +36,7 @@ def _resource(**overrides: object) -> ResolvedResource:
 def test_extension_for_resource_uses_format_map() -> None:
     assert extension_for_resource(_resource(format="xlsx")) == ".xlsx"
     assert extension_for_resource(_resource(format="ZIP")) == ".zip"
+    assert extension_for_resource(_resource(format="XML")) == ".xml"
 
 
 def test_extension_for_resource_falls_back_to_url_suffix() -> None:

@@ -27,6 +27,7 @@ FORMAT_EXTENSIONS = {
     "CSV": ".csv",
     "GEOJSON": ".geojson",
     "JSON": ".json",
+    "XML": ".xml",
     "GPKG": ".gpkg",
     "SHP": ".shp",
 }

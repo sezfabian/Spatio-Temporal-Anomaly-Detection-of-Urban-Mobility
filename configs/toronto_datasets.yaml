@@ -49,6 +49,17 @@ datasets:
       - name: detailed-bluetooth-travel-time-readme
         kind: docs
 
+  # Portal: https://open.toronto.ca/dataset/festivals-events/
+  # Live JSON calendar feed is currently blocked upstream; ingest historical XML + readme only.
+  festivals_events:
+    package_id: festivals-events
+    description: City festivals and events with locations (historical XML Jan 2014–Dec 2016)
+    resources:
+      - name: festivals-and-events-historical-xml-feed-jan-2014-dec-2016
+        kind: events
+      - name: festivals-and-events-readme
+        kind: docs
+
 # Environment and Climate Change Canada historical climate.
 # Portal: https://climate.weather.gc.ca/
 # Station page (Toronto City): climate_id=6158355

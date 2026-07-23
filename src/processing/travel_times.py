@@ -64,17 +64,16 @@ def read_travel_time_zip(path: Path) -> pd.DataFrame:
     if missing:
         raise ValueError(f"{path} missing columns: {sorted(missing)}")
 
+    # Mixed EST/EDT offsets (-05/-04) become object dtype unless parsed via UTC first.
+    ts_utc = pd.to_datetime(raw["updated"], utc=True, errors="coerce")
     out = pd.DataFrame(
         {
             "route_id": raw["resultId"].astype("string"),
             "travel_time_s": pd.to_numeric(raw["timeInSeconds"], errors="coerce"),
             "sample_count": pd.to_numeric(raw["count"], errors="coerce"),
-            "ts_local": pd.to_datetime(raw["updated"], utc=False, errors="coerce"),
+            "ts_local": ts_utc.dt.tz_convert(LOCAL_TZ),
         }
     )
-    # Preserve offset-aware timestamps as Toronto-local wall times when present.
-    if getattr(out["ts_local"].dt, "tz", None) is not None:
-        out["ts_local"] = out["ts_local"].dt.tz_convert(LOCAL_TZ)
     out["year"] = year if year is not None else out["ts_local"].dt.year
     out = out.dropna(subset=["route_id", "ts_local", "travel_time_s"])
     out = out.loc[out["travel_time_s"] > 0].reset_index(drop=True)

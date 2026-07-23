@@ -17,6 +17,19 @@ def _ensure_tz(series: pd.Series) -> pd.Series:
     return series.dt.tz_convert(LOCAL_TZ)
 
 
+def floor_to_local_hour(series: pd.Series) -> pd.Series:
+    """Floor timestamps to the hour without DST ambiguous-time failures.
+
+    Args:
+        series: Timezone-aware datetime series (America/Toronto).
+
+    Returns:
+        Same timezone, floored to the hour. Flooring is done in UTC so
+        fall-back transitions (e.g. 2014-11-02 01:00) do not raise.
+    """
+    return series.dt.tz_convert("UTC").dt.floor("h").dt.tz_convert(LOCAL_TZ)
+
+
 def build_event_day_summary(events: pd.DataFrame) -> pd.DataFrame:
     """Collapse events into per-date citywide exposure counts.
 
@@ -99,7 +112,7 @@ def build_route_time_panel(
     weather["ts_local"] = _ensure_tz(pd.to_datetime(weather["ts_local"], utc=False))
 
     panel = travel.merge(routes, on="route_id", how="left")
-    panel["ts_hour"] = panel["ts_local"].dt.floor("h")
+    panel["ts_hour"] = floor_to_local_hour(panel["ts_local"])
     panel = panel.merge(
         weather.add_prefix("wx_").rename(columns={"wx_ts_local": "ts_hour"}),
         on="ts_hour",

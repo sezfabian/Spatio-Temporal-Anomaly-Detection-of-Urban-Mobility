@@ -13,7 +13,11 @@ import yaml
 
 from src.processing.civic import normalize_civic_days
 from src.processing.events import normalize_events, parse_festivals_xml
-from src.processing.panel import build_event_day_summary, build_route_time_panel
+from src.processing.panel import (
+    build_event_day_summary,
+    build_route_time_panel,
+    floor_to_local_hour,
+)
 from src.processing.routes import normalize_routes, read_routes_zip
 from src.processing.travel_times import normalize_travel_times, read_travel_time_zip
 from src.processing.weather import normalize_weather, read_weather_csv
@@ -76,6 +80,23 @@ def test_read_travel_time_zip(tmp_path: Path) -> None:
     assert len(frame) == 2
     assert set(frame["route_id"]) == {"J_I"}
     assert int(frame["year"].iloc[0]) == 2017
+    assert str(frame["ts_local"].dt.tz) == "America/Toronto"
+
+
+def test_read_travel_time_zip_mixed_offsets(tmp_path: Path) -> None:
+    """Winter (-05) and summer (-04) offsets must parse into one tz-aware series."""
+    zip_path = tmp_path / "travel-time-2016.zip"
+    csv = (
+        "resultId,timeInSeconds,count,updated\n"
+        "J_I,56,16,2016-01-15T00:05:00-05\n"
+        "J_I,60,9,2016-07-15T00:05:00-04\n"
+    )
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr("travel-time-2016.csv", csv)
+    frame = read_travel_time_zip(zip_path)
+    assert len(frame) == 2
+    assert str(frame["ts_local"].dtype).startswith("datetime64")
+    assert str(frame["ts_local"].dt.tz) == "America/Toronto"
 
 
 def test_normalize_travel_times(tmp_path: Path) -> None:
@@ -205,6 +226,20 @@ def test_normalize_routes(tmp_path: Path) -> None:
         archive.write(dbf, arcname="bluetooth_routes_wgs84.dbf")
     out = normalize_routes(tmp_path / "raw", tmp_path / "interim")
     assert pd.read_parquet(out).iloc[0]["route_id"] == "J_I"
+
+
+def test_floor_to_local_hour_handles_dst_fallback() -> None:
+    """Fall-back 01:xx local must floor without AmbiguousTimeError."""
+    # Build via UTC so construction itself is unambiguous around DST end.
+    ts = pd.Series(
+        [
+            pd.Timestamp("2014-11-02 05:05:00", tz="UTC").tz_convert("America/Toronto"),
+            pd.Timestamp("2014-11-02 06:35:00", tz="UTC").tz_convert("America/Toronto"),
+        ]
+    )
+    floored = floor_to_local_hour(ts)
+    assert str(floored.dt.tz) == "America/Toronto"
+    assert floored.dt.minute.eq(0).all()
 
 
 def test_build_event_day_summary() -> None:

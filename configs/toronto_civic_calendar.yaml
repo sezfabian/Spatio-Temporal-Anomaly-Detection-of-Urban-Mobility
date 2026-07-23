@@ -1,0 +1,523 @@
+# Toronto civic calendar for mobility feature engineering (2014-2017).
+# Layer A: citywide holidays and known mega-event windows that shift
+# traffic / pedestrian patterns even without precise venue geometry.
+#
+# Public holidays follow Ontario Employment Standards observances where relevant.
+# Mega-event windows are approximate inclusive date ranges for training features.
+
+timezone: America/Toronto
+start_year: 2014
+end_year: 2017
+
+events:
+  # --- 2014 public / civic holidays ---
+  - id: 2014_new_years_day
+    name: New Year's Day
+    kind: public_holiday
+    start_date: 2014-01-01
+    end_date: 2014-01-01
+    scope: citywide
+
+  - id: 2014_family_day
+    name: Family Day
+    kind: public_holiday
+    start_date: 2014-02-17
+    end_date: 2014-02-17
+    scope: citywide
+
+  - id: 2014_good_friday
+    name: Good Friday
+    kind: public_holiday
+    start_date: 2014-04-18
+    end_date: 2014-04-18
+    scope: citywide
+
+  - id: 2014_victoria_day
+    name: Victoria Day
+    kind: public_holiday
+    start_date: 2014-05-19
+    end_date: 2014-05-19
+    scope: citywide
+
+  - id: 2014_canada_day
+    name: Canada Day
+    kind: public_holiday
+    start_date: 2014-07-01
+    end_date: 2014-07-01
+    scope: citywide
+
+  - id: 2014_civic_holiday
+    name: Civic Holiday
+    kind: civic_holiday
+    start_date: 2014-08-04
+    end_date: 2014-08-04
+    scope: citywide
+
+  - id: 2014_labour_day
+    name: Labour Day
+    kind: public_holiday
+    start_date: 2014-09-01
+    end_date: 2014-09-01
+    scope: citywide
+
+  - id: 2014_thanksgiving
+    name: Thanksgiving Day
+    kind: public_holiday
+    start_date: 2014-10-13
+    end_date: 2014-10-13
+    scope: citywide
+
+  - id: 2014_christmas_day
+    name: Christmas Day
+    kind: public_holiday
+    start_date: 2014-12-25
+    end_date: 2014-12-25
+    scope: citywide
+
+  - id: 2014_boxing_day
+    name: Boxing Day
+    kind: public_holiday
+    start_date: 2014-12-26
+    end_date: 2014-12-26
+    scope: citywide
+
+  # --- 2014 mega-events / peaks ---
+  - id: 2014_march_break
+    name: March Break
+    kind: school_break
+    start_date: 2014-03-10
+    end_date: 2014-03-14
+    scope: citywide
+
+  - id: 2014_pride
+    name: Pride Toronto weekend
+    kind: mega_event
+    start_date: 2014-06-27
+    end_date: 2014-06-29
+    scope: citywide
+    notes: Parade weekend; downtown corridors heavily affected.
+
+  - id: 2014_caribana
+    name: Caribbean Carnival weekend
+    kind: mega_event
+    start_date: 2014-08-01
+    end_date: 2014-08-03
+    scope: citywide
+    notes: Parade / festival weekend; major arterial impacts.
+
+  - id: 2014_tiff
+    name: Toronto International Film Festival
+    kind: mega_event
+    start_date: 2014-09-04
+    end_date: 2014-09-14
+    scope: citywide
+
+  - id: 2014_nuit_blanche
+    name: Nuit Blanche
+    kind: mega_event
+    start_date: 2014-10-04
+    end_date: 2014-10-05
+    scope: citywide
+    notes: Overnight cultural event; downtown pedestrian surge.
+
+  - id: 2014_santa_claus_parade
+    name: Santa Claus Parade
+    kind: parade
+    start_date: 2014-11-16
+    end_date: 2014-11-16
+    scope: citywide
+    notes: Classic downtown parade route closures.
+
+  - id: 2014_holiday_shopping_peak
+    name: December holiday shopping peak
+    kind: shopping_peak
+    start_date: 2014-12-20
+    end_date: 2014-12-24
+    scope: citywide
+
+  # --- 2015 public / civic holidays ---
+  - id: 2015_new_years_day
+    name: New Year's Day
+    kind: public_holiday
+    start_date: 2015-01-01
+    end_date: 2015-01-01
+    scope: citywide
+
+  - id: 2015_family_day
+    name: Family Day
+    kind: public_holiday
+    start_date: 2015-02-16
+    end_date: 2015-02-16
+    scope: citywide
+
+  - id: 2015_good_friday
+    name: Good Friday
+    kind: public_holiday
+    start_date: 2015-04-03
+    end_date: 2015-04-03
+    scope: citywide
+
+  - id: 2015_victoria_day
+    name: Victoria Day
+    kind: public_holiday
+    start_date: 2015-05-18
+    end_date: 2015-05-18
+    scope: citywide
+
+  - id: 2015_canada_day
+    name: Canada Day
+    kind: public_holiday
+    start_date: 2015-07-01
+    end_date: 2015-07-01
+    scope: citywide
+
+  - id: 2015_civic_holiday
+    name: Civic Holiday
+    kind: civic_holiday
+    start_date: 2015-08-03
+    end_date: 2015-08-03
+    scope: citywide
+
+  - id: 2015_labour_day
+    name: Labour Day
+    kind: public_holiday
+    start_date: 2015-09-07
+    end_date: 2015-09-07
+    scope: citywide
+
+  - id: 2015_thanksgiving
+    name: Thanksgiving Day
+    kind: public_holiday
+    start_date: 2015-10-12
+    end_date: 2015-10-12
+    scope: citywide
+
+  - id: 2015_christmas_day
+    name: Christmas Day
+    kind: public_holiday
+    start_date: 2015-12-25
+    end_date: 2015-12-25
+    scope: citywide
+
+  - id: 2015_boxing_day
+    name: Boxing Day
+    kind: public_holiday
+    start_date: 2015-12-26
+    end_date: 2015-12-26
+    scope: citywide
+
+  # --- 2015 mega-events / peaks ---
+  - id: 2015_march_break
+    name: March Break
+    kind: school_break
+    start_date: 2015-03-16
+    end_date: 2015-03-20
+    scope: citywide
+
+  - id: 2015_pan_am_games
+    name: Pan Am / Parapan Am Games period
+    kind: mega_event
+    start_date: 2015-07-10
+    end_date: 2015-08-15
+    scope: citywide
+    notes: Major multi-week mobility disruption window across GTA.
+
+  - id: 2015_pride
+    name: Pride Toronto weekend
+    kind: mega_event
+    start_date: 2015-06-26
+    end_date: 2015-06-28
+    scope: citywide
+
+  - id: 2015_caribana
+    name: Caribbean Carnival weekend
+    kind: mega_event
+    start_date: 2015-07-31
+    end_date: 2015-08-02
+    scope: citywide
+
+  - id: 2015_tiff
+    name: Toronto International Film Festival
+    kind: mega_event
+    start_date: 2015-09-10
+    end_date: 2015-09-20
+    scope: citywide
+
+  - id: 2015_nuit_blanche
+    name: Nuit Blanche
+    kind: mega_event
+    start_date: 2015-10-03
+    end_date: 2015-10-04
+    scope: citywide
+
+  - id: 2015_santa_claus_parade
+    name: Santa Claus Parade
+    kind: parade
+    start_date: 2015-11-15
+    end_date: 2015-11-15
+    scope: citywide
+
+  - id: 2015_holiday_shopping_peak
+    name: December holiday shopping peak
+    kind: shopping_peak
+    start_date: 2015-12-20
+    end_date: 2015-12-24
+    scope: citywide
+
+  # --- 2016 public / civic holidays ---
+  - id: 2016_new_years_day
+    name: New Year's Day
+    kind: public_holiday
+    start_date: 2016-01-01
+    end_date: 2016-01-01
+    scope: citywide
+
+  - id: 2016_family_day
+    name: Family Day
+    kind: public_holiday
+    start_date: 2016-02-15
+    end_date: 2016-02-15
+    scope: citywide
+
+  - id: 2016_good_friday
+    name: Good Friday
+    kind: public_holiday
+    start_date: 2016-03-25
+    end_date: 2016-03-25
+    scope: citywide
+
+  - id: 2016_victoria_day
+    name: Victoria Day
+    kind: public_holiday
+    start_date: 2016-05-23
+    end_date: 2016-05-23
+    scope: citywide
+
+  - id: 2016_canada_day
+    name: Canada Day
+    kind: public_holiday
+    start_date: 2016-07-01
+    end_date: 2016-07-01
+    scope: citywide
+
+  - id: 2016_civic_holiday
+    name: Civic Holiday
+    kind: civic_holiday
+    start_date: 2016-08-01
+    end_date: 2016-08-01
+    scope: citywide
+
+  - id: 2016_labour_day
+    name: Labour Day
+    kind: public_holiday
+    start_date: 2016-09-05
+    end_date: 2016-09-05
+    scope: citywide
+
+  - id: 2016_thanksgiving
+    name: Thanksgiving Day
+    kind: public_holiday
+    start_date: 2016-10-10
+    end_date: 2016-10-10
+    scope: citywide
+
+  - id: 2016_christmas_day
+    name: Christmas Day
+    kind: public_holiday
+    start_date: 2016-12-25
+    end_date: 2016-12-25
+    scope: citywide
+
+  - id: 2016_boxing_day
+    name: Boxing Day
+    kind: public_holiday
+    start_date: 2016-12-26
+    end_date: 2016-12-26
+    scope: citywide
+
+  # --- 2016 mega-events / peaks ---
+  - id: 2016_march_break
+    name: March Break
+    kind: school_break
+    start_date: 2016-03-14
+    end_date: 2016-03-18
+    scope: citywide
+
+  - id: 2016_pride
+    name: Pride Toronto weekend
+    kind: mega_event
+    start_date: 2016-07-01
+    end_date: 2016-07-03
+    scope: citywide
+
+  - id: 2016_caribana
+    name: Caribbean Carnival weekend
+    kind: mega_event
+    start_date: 2016-07-29
+    end_date: 2016-07-31
+    scope: citywide
+
+  - id: 2016_tiff
+    name: Toronto International Film Festival
+    kind: mega_event
+    start_date: 2016-09-08
+    end_date: 2016-09-18
+    scope: citywide
+
+  - id: 2016_nuit_blanche
+    name: Nuit Blanche
+    kind: mega_event
+    start_date: 2016-10-01
+    end_date: 2016-10-02
+    scope: citywide
+
+  - id: 2016_santa_claus_parade
+    name: Santa Claus Parade
+    kind: parade
+    start_date: 2016-11-20
+    end_date: 2016-11-20
+    scope: citywide
+
+  - id: 2016_holiday_shopping_peak
+    name: December holiday shopping peak
+    kind: shopping_peak
+    start_date: 2016-12-20
+    end_date: 2016-12-24
+    scope: citywide
+
+  # --- 2017 public / civic holidays ---
+  - id: 2017_new_years_day
+    name: New Year's Day
+    kind: public_holiday
+    start_date: 2017-01-01
+    end_date: 2017-01-01
+    scope: citywide
+
+  - id: 2017_new_years_day_observed
+    name: New Year's Day (observed)
+    kind: public_holiday
+    start_date: 2017-01-02
+    end_date: 2017-01-02
+    scope: citywide
+    notes: Jan 1 fell on Sunday; many workplaces observed Monday.
+
+  - id: 2017_family_day
+    name: Family Day
+    kind: public_holiday
+    start_date: 2017-02-20
+    end_date: 2017-02-20
+    scope: citywide
+
+  - id: 2017_good_friday
+    name: Good Friday
+    kind: public_holiday
+    start_date: 2017-04-14
+    end_date: 2017-04-14
+    scope: citywide
+
+  - id: 2017_victoria_day
+    name: Victoria Day
+    kind: public_holiday
+    start_date: 2017-05-22
+    end_date: 2017-05-22
+    scope: citywide
+
+  - id: 2017_canada_day
+    name: Canada Day
+    kind: public_holiday
+    start_date: 2017-07-01
+    end_date: 2017-07-01
+    scope: citywide
+
+  - id: 2017_canada_day_observed
+    name: Canada Day (observed)
+    kind: public_holiday
+    start_date: 2017-07-03
+    end_date: 2017-07-03
+    scope: citywide
+    notes: Jul 1 fell on Saturday; common Monday observance.
+
+  - id: 2017_civic_holiday
+    name: Civic Holiday
+    kind: civic_holiday
+    start_date: 2017-08-07
+    end_date: 2017-08-07
+    scope: citywide
+
+  - id: 2017_labour_day
+    name: Labour Day
+    kind: public_holiday
+    start_date: 2017-09-04
+    end_date: 2017-09-04
+    scope: citywide
+
+  - id: 2017_thanksgiving
+    name: Thanksgiving Day
+    kind: public_holiday
+    start_date: 2017-10-09
+    end_date: 2017-10-09
+    scope: citywide
+
+  - id: 2017_christmas_day
+    name: Christmas Day
+    kind: public_holiday
+    start_date: 2017-12-25
+    end_date: 2017-12-25
+    scope: citywide
+
+  - id: 2017_boxing_day
+    name: Boxing Day
+    kind: public_holiday
+    start_date: 2017-12-26
+    end_date: 2017-12-26
+    scope: citywide
+
+  # --- 2017 mega-events / peaks ---
+  - id: 2017_march_break
+    name: March Break
+    kind: school_break
+    start_date: 2017-03-13
+    end_date: 2017-03-17
+    scope: citywide
+
+  - id: 2017_pride
+    name: Pride Toronto weekend
+    kind: mega_event
+    start_date: 2017-06-23
+    end_date: 2017-06-25
+    scope: citywide
+
+  - id: 2017_caribana
+    name: Caribbean Carnival weekend
+    kind: mega_event
+    start_date: 2017-08-04
+    end_date: 2017-08-06
+    scope: citywide
+
+  - id: 2017_tiff
+    name: Toronto International Film Festival
+    kind: mega_event
+    start_date: 2017-09-07
+    end_date: 2017-09-17
+    scope: citywide
+
+  - id: 2017_nuit_blanche
+    name: Nuit Blanche
+    kind: mega_event
+    start_date: 2017-09-30
+    end_date: 2017-10-01
+    scope: citywide
+
+  - id: 2017_santa_claus_parade
+    name: Santa Claus Parade
+    kind: parade
+    start_date: 2017-11-19
+    end_date: 2017-11-19
+    scope: citywide
+
+  - id: 2017_holiday_shopping_peak
+    name: December holiday shopping peak
+    kind: shopping_peak
+    start_date: 2017-12-20
+    end_date: 2017-12-24
+    scope: citywide

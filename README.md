@@ -309,6 +309,32 @@ print(panel.columns.tolist())
 print(panel.head())
 ```
 
+### Visualize on a Toronto map
+
+Plot Bluetooth corridors on a street basemap, colored by an aggregated panel metric (default: mean `delay_s`):
+
+```python
+from src.viz import visualize_processed_network
+
+graph, ax = visualize_processed_network(
+    "data/processed/route_time_panel.parquet",
+    metric="delay_s",
+    agg="mean",
+    basemap=True,
+    basemap_style="positron",  # or: voyager, streets, dark
+    save_path="figures/route_network.png",
+)
+```
+
+CLI:
+
+```bash
+python -m src.viz.network --basemap-style positron \
+  --save figures/route_network.png --no-show
+```
+
+Basemap tiles need network access the first time (cached afterward). Use `--no-basemap` offline.
+
 ### Adding processing for a new source
 
 1. Ingest it to `data/raw/...` (see above).

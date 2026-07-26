@@ -224,3 +224,7 @@ data/interim/**
 !data/interim/.gitkeep
 data/processed/**
 !data/processed/.gitkeep
+
+# Output images
+output/images/**
+!output/images/.gitkeep

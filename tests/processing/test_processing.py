@@ -13,6 +13,7 @@ import yaml
 
 from src.processing.civic import normalize_civic_days
 from src.processing.events import normalize_events, parse_festivals_xml
+from src.processing.clean_panel import clean_panel_for_v1, columns_to_drop
 from src.processing.panel import (
     build_event_day_summary,
     build_route_time_panel,
@@ -330,3 +331,78 @@ def test_build_route_time_panel(tmp_path: Path) -> None:
     assert "delay_s" in panel.columns
     assert qa["n_rows"] == 2
     assert qa["weather_match_rate"] == 1.0
+
+
+def test_columns_to_drop_v1() -> None:
+    cols = [
+        "route_id",
+        "wx_temp_c",
+        "wx_wind_spd_kmh",
+        "wx_wind_dir_10s",
+        "wx_visibility_km",
+        "wx_weather_desc",
+        "wx_wind_chill",
+        "wx_humidex",
+        "holiday_names",
+        "mega_event_names",
+        "event_ids",
+        "event_kinds",
+        "is_weekend",
+        "delay_s",
+    ]
+    dropped = columns_to_drop(cols)
+    assert "wx_wind_spd_kmh" in dropped
+    assert "wx_humidex" in dropped
+    assert "mega_event_names" in dropped
+    assert "holiday_names" in dropped
+    assert "event_ids" not in dropped
+    assert "event_kinds" not in dropped
+    assert "is_weekend" not in dropped
+    assert "wx_temp_c" not in dropped
+    assert "delay_s" not in dropped
+
+
+def test_clean_panel_for_v1(tmp_path: Path) -> None:
+    panel = pd.DataFrame(
+        {
+            "route_id": ["A_B", "B_C"],
+            "ts_local": pd.to_datetime(
+                ["2016-06-18 10:00:00-04:00", "2016-06-19 10:00:00-04:00"]  # Sat, Sun
+            ),
+            "delay_s": [1.0, 2.0],
+            "is_weekend": [False, False],  # wrong on purpose; cleaner should fix
+            "wx_temp_c": [10.0, 11.0],
+            "wx_wind_spd_kmh": [None, None],
+            "wx_visibility_km": [None, None],
+            "wx_weather_desc": [None, None],
+            "wx_wind_chill": [None, None],
+            "wx_humidex": [None, None],
+            "holiday_names": ["Canada Day", None],
+            "mega_event_names": ["Pride", ""],
+            "event_ids": ["e1", None],
+            "event_kinds": ["festival", None],
+        }
+    )
+    src = tmp_path / "route_time_panel.parquet"
+    panel.to_parquet(src, index=False)
+    out, qa = clean_panel_for_v1(
+        src,
+        out_path=tmp_path / "route_time_panel_v1.parquet",
+        qa_path=tmp_path / "route_time_panel_v1_qa.json",
+    )
+    cleaned = pd.read_parquet(out)
+    assert cleaned["is_weekend"].tolist() == [True, True]
+    assert "event_ids" in cleaned.columns
+    assert "event_kinds" in cleaned.columns
+    assert "holiday_names" not in cleaned.columns
+    assert "mega_event_names" not in cleaned.columns
+    for col in (
+        "wx_wind_spd_kmh",
+        "wx_visibility_km",
+        "wx_weather_desc",
+        "wx_wind_chill",
+        "wx_humidex",
+    ):
+        assert col not in cleaned.columns
+    assert qa["is_weekend_rate"] == 1.0
+    assert qa["event_ids_nonempty_rate"] == 0.5

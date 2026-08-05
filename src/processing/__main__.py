@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from src.processing.civic import normalize_civic_days
+from src.processing.clean_panel import clean_panel_for_v1
 from src.processing.events import normalize_events
 from src.processing.panel import build_route_time_panel
 from src.processing.paths import DEFAULT_INTERIM_DIR, DEFAULT_PROCESSED_DIR, DEFAULT_RAW_DIR
@@ -22,6 +23,7 @@ STEPS = (
     "events",
     "routes",
     "panel",
+    "panel_v1",
     "all",
 )
 
@@ -81,8 +83,25 @@ def run_step(step: str, args: argparse.Namespace) -> int:
         print(f"wrote\t{path}")
         print(json.dumps(qa, indent=2))
         return 0
+    if step == "panel_v1":
+        path, qa = clean_panel_for_v1(
+            args.processed_dir / "route_time_panel.parquet",
+            out_path=args.processed_dir / "route_time_panel_v1.parquet",
+            qa_path=args.processed_dir / "route_time_panel_v1_qa.json",
+        )
+        print(f"wrote\t{path}")
+        print(json.dumps(qa, indent=2))
+        return 0
     if step == "all":
-        for name in ("travel_times", "weather", "civic", "events", "routes", "panel"):
+        for name in (
+            "travel_times",
+            "weather",
+            "civic",
+            "events",
+            "routes",
+            "panel",
+            "panel_v1",
+        ):
             code = run_step(name, args)
             if code != 0:
                 return code

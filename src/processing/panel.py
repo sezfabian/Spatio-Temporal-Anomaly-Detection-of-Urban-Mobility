@@ -130,8 +130,11 @@ def build_route_time_panel(
         panel[col] = panel[col].fillna(0).astype("int64")
 
     panel["hour"] = panel["ts_local"].dt.hour.astype("int16")
+    # Calendar weekday: Monday=0 … Sunday=6 (America/Toronto local date).
     panel["dow"] = panel["ts_local"].dt.dayofweek.astype("int16")
-    panel["is_weekend"] = panel["dow"].isin([5, 6])
+    panel["is_weekend"] = panel["dow"].isin([5, 6]).astype("bool")
+    if "holiday_names" in panel.columns:
+        panel["holiday_names"] = panel["holiday_names"].fillna("").astype("string")
     if "free_flow_s" in panel.columns:
         panel["delay_s"] = panel["travel_time_s"] - panel["free_flow_s"]
 

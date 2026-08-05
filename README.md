@@ -245,6 +245,7 @@ Processing turns `data/raw` (+ civic calendar config) into tidy Parquet tables, 
 | `events` | festivals historical XML under `data/raw/festivals_events/` | `data/interim/events.parquet` | Parse festivals/events into tidy rows (`name`, `start_local`, `end_local`, `lat`, `lon`, `road_close`, …) |
 | `routes` | `bluetooth-routes-wgs84.zip` | `data/interim/routes.parquet` | Route attributes (`route_id`, `free_flow_s`, `length_m`) for delay features |
 | `panel` | all interim tables above | `data/processed/route_time_panel.parquet` (+ QA JSON) | Join everything into a route × timestamp analysis table |
+| `panel_v1` | `route_time_panel.parquet` | `data/processed/route_time_panel_v1.parquet` (+ QA JSON) | Drop sparse weather / free-text columns for ST-GAE v1 training |
 | `all` | — | all of the above, in order | Full rebuild |
 
 **Panel joins (conceptually):**
@@ -267,6 +268,7 @@ python -m src.processing --step civic
 python -m src.processing --step events
 python -m src.processing --step routes
 python -m src.processing --step panel
+python -m src.processing --step panel_v1   # drop null-heavy / free-text cols for training
 ```
 
 Process / panel only one travel-time year (faster smoke runs):
@@ -297,6 +299,8 @@ python -m src.processing --step all --year 2014 --year 2015
 |---|---|
 | `data/processed/route_time_panel.parquet` | Joined route×time panel with weather (`wx_*`), civic flags, event counts, `delay_s`, calendar fields |
 | `data/processed/route_time_panel_qa.json` | Row counts, year range, join match rates, null rates |
+| `data/processed/route_time_panel_v1.parquet` | Training panel: drops sparse weather + free-text names (`holiday_names`, `mega_event_names`); keeps calendar `is_weekend` and event id/kind/counts |
+| `data/processed/route_time_panel_v1_qa.json` | Columns dropped / retained for the v1 panel |
 
 Quick peek in Python:
 
@@ -311,7 +315,7 @@ print(panel.head())
 
 ### Visualize on a Toronto map
 
-Plot Bluetooth corridors on a street basemap, colored by an aggregated panel metric (default: mean `delay_s`):
+**Static map** — corridors on a street basemap, colored by an aggregated panel metric:
 
 ```python
 from src.viz import visualize_processed_network
@@ -326,14 +330,37 @@ graph, ax = visualize_processed_network(
 )
 ```
 
-CLI:
-
 ```bash
 python -m src.viz.network --basemap-style positron \
   --save figures/route_network.png --no-show
 ```
 
-Basemap tiles need network access the first time (cached afterward). Use `--no-basemap` offline.
+**Interactive map** — choose a date period + interval, play congestion over time, and zoom/pan:
+
+```bash
+# Streamlit UI (date pickers, interval, Build map, Play / zoom)
+streamlit run src/viz/app.py
+
+# Or write a self-contained HTML with play slider + zoom
+python -m src.viz.interactive \
+  --start 2016-06-15 --end 2016-06-16 --freq h \
+  --save figures/congestion_interactive.html --show
+```
+
+```python
+from src.viz import build_animated_congestion_figure, save_interactive_map
+
+fig = build_animated_congestion_figure(
+    "data/processed/route_time_panel.parquet",
+    start="2016-06-15",
+    end="2016-06-16",
+    freq="h",  # or 30min, 15min, 5min
+)
+save_interactive_map(fig, "figures/congestion_interactive.html")
+fig.show()  # browser: Play/Pause, time slider, scroll-zoom, drag-pan
+```
+
+Basemap tiles need network access the first time (cached afterward). Use `--no-basemap` on the static CLI offline.
 
 ### Adding processing for a new source
 

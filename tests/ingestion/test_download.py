@@ -52,6 +52,17 @@ def test_local_path_for_resource_nests_by_dataset(tmp_path: Path) -> None:
     assert path == tmp_path / "travel_times_bluetooth" / "travel-time-2014.zip"
 
 
+def test_local_path_for_resource_avoids_double_extension(tmp_path: Path) -> None:
+    resource = _resource(
+        dataset_key="traffic_collisions",
+        name="Traffic Collisions - 4326.csv",
+        format="CSV",
+        url="https://example.ckan/traffic-collisions-4326.csv",
+    )
+    path = local_path_for_resource(resource, tmp_path)
+    assert path == tmp_path / "traffic_collisions" / "Traffic Collisions - 4326.csv"
+
+
 def test_download_resource_streams_to_destination(tmp_path: Path) -> None:
     destination = tmp_path / "travel_times_bluetooth" / "travel-time-2014.zip"
     resource = _resource()
@@ -70,7 +81,7 @@ def test_download_resource_streams_to_destination(tmp_path: Path) -> None:
     assert result.bytes_written == 6
     assert destination.read_bytes() == b"abcdef"
     assert not destination.with_suffix(".zip.partial").exists()
-    session.get.assert_called_once_with(resource.url, stream=True, timeout=120)
+    session.get.assert_called_once_with(resource.url, stream=True, timeout=600)
 
 
 def test_download_resource_skips_existing_file(tmp_path: Path) -> None:

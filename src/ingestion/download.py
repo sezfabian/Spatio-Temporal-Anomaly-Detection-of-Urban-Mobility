@@ -82,8 +82,15 @@ def local_path_for_resource(resource: ResolvedResource, raw_dir: Path) -> Path:
 
     Returns:
         Path of the form ``{raw_dir}/{dataset_key}/{resource_name}{ext}``.
+        If ``resource.name`` already ends with the inferred extension (common for
+        Toronto CKAN CSV resources), the extension is not appended again.
     """
-    filename = f"{resource.name}{extension_for_resource(resource)}"
+    ext = extension_for_resource(resource)
+    name = resource.name
+    if name.lower().endswith(ext.lower()):
+        filename = name
+    else:
+        filename = f"{name}{ext}"
     return raw_dir / resource.dataset_key / filename
 
 
@@ -94,7 +101,7 @@ def download_resource(
     *,
     force: bool = False,
     chunk_size: int = CHUNK_SIZE,
-    timeout: int = 120,
+    timeout: int = 600,
 ) -> DownloadResult:
     """Stream one remote resource to disk.
 

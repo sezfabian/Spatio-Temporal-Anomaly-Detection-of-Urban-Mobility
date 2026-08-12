@@ -60,6 +60,16 @@ datasets:
       - name: festivals-and-events-readme
         kind: docs
 
+  # Portal: https://open.toronto.ca/dataset/police-annual-statistical-report-traffic-collisions/
+  # Occurrence-level MVC records (property damage / fail-to-remain / injury / fatal).
+  # Prefer WGS84 CSV (~180 MB) over multi-GB shapefiles / GeoJSON for ingestion.
+  traffic_collisions:
+    package_id: police-annual-statistical-report-traffic-collisions
+    description: Toronto Police motor vehicle collisions (occurrence-level, WGS84)
+    resources:
+      - name: Traffic Collisions - 4326.csv
+        kind: collisions
+
 # Environment and Climate Change Canada historical climate.
 # Portal: https://climate.weather.gc.ca/
 # Station page (Toronto City): climate_id=6158355

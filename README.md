@@ -87,6 +87,7 @@ Defined in [`configs/toronto_datasets.yaml`](configs/toronto_datasets.yaml):
 | `king_st_bluetooth_segments` | Toronto Open Data CKAN | King St segment geometries |
 | `king_st_bluetooth_travel_times` | Toronto Open Data CKAN | King St travel times |
 | `festivals_events` | Toronto Open Data CKAN | Historical festivals XML (2014–2016) + readme |
+| `traffic_collisions` | [Toronto Open Data](https://open.toronto.ca/dataset/police-annual-statistical-report-traffic-collisions/) CKAN | Police MVC occurrences (WGS84 CSV) |
 | `weather` (top-level block) | [ECCC climate](https://climate.weather.gc.ca/) | Hourly Toronto City CSVs (`climate_id=6158355`, 2014–2017) |
 
 Civic calendar events are **not downloaded**; they live in [`configs/toronto_civic_calendar.yaml`](configs/toronto_civic_calendar.yaml) and are materialized during processing.
@@ -102,6 +103,7 @@ python -m src.ingestion.ckan
 # one dataset
 python -m src.ingestion.ckan --dataset travel_times_bluetooth
 python -m src.ingestion.ckan --dataset festivals_events
+python -m src.ingestion.ckan --dataset traffic_collisions
 ```
 
 Example output (TSV):
@@ -119,6 +121,7 @@ python -m src.ingestion.download
 # one dataset
 python -m src.ingestion.download --dataset travel_times_bluetooth
 python -m src.ingestion.download --dataset festivals_events
+python -m src.ingestion.download --dataset traffic_collisions
 
 # only certain resource kinds
 python -m src.ingestion.download --dataset travel_times_bluetooth --kind travel_times --kind geo
@@ -244,6 +247,7 @@ Processing turns `data/raw` (+ civic calendar config) into tidy Parquet tables, 
 | `civic` | `configs/toronto_civic_calendar.yaml` | `data/interim/civic_days.parquet` | One row per calendar day with holiday / parade / mega-event flags |
 | `events` | festivals historical XML under `data/raw/festivals_events/` | `data/interim/events.parquet` | Parse festivals/events into tidy rows (`name`, `start_local`, `end_local`, `lat`, `lon`, `road_close`, …) |
 | `routes` | `bluetooth-routes-wgs84.zip` | `data/interim/routes.parquet` | Route attributes (`route_id`, `free_flow_s`, `length_m`) for delay features |
+| `collisions` | collision CSV + Bluetooth routes ZIP | `data/interim/collisions.parquet` (+ QA JSON) | Drop unlocated MVCs; snap to nearest Bluetooth corridor within `--max-match-distance-m` (default 150 m); discard farther points |
 | `panel` | all interim tables above | `data/processed/route_time_panel.parquet` (+ QA JSON) | Join everything into a route × timestamp analysis table |
 | `panel_v1` | `route_time_panel.parquet` | `data/processed/route_time_panel_v1.parquet` (+ QA JSON) | Drop sparse weather / free-text columns for ST-GAE v1 training |
 | `all` | — | all of the above, in order | Full rebuild |
@@ -253,7 +257,8 @@ Processing turns `data/raw` (+ civic calendar config) into tidy Parquet tables, 
 2. ⟕ weather on hour (`ts_local` floored to hour, DST-safe)
 3. ⟕ civic flags on calendar `date`
 4. ⟕ citywide event exposure counts on `date`
-5. derived fields: `hour`, `dow`, `is_weekend`, `delay_s` (= travel − free-flow when available)
+5. ⟕ route-matched collision counts on (`route_id`, hour) — only collisions snapped within 150 m of a Bluetooth corridor
+6. derived fields: `hour`, `dow`, `is_weekend`, `delay_s` (= travel − free-flow when available)
 
 ### Run processing
 
@@ -267,8 +272,12 @@ python -m src.processing --step weather
 python -m src.processing --step civic
 python -m src.processing --step events
 python -m src.processing --step routes
+python -m src.processing --step collisions   # includes nearest-route snap + distance filter
 python -m src.processing --step panel
 python -m src.processing --step panel_v1   # drop null-heavy / free-text cols for training
+
+# optional: widen/narrow the collision↔route snap radius (meters)
+python -m src.processing --step collisions --max-match-distance-m 250
 ```
 
 Process / panel only one travel-time year (faster smoke runs):
@@ -291,13 +300,15 @@ python -m src.processing --step all --year 2014 --year 2015
 | `data/interim/weather_hourly.parquet` | hour | `ts_local`, `temp_c`, `rel_hum_pct`, `precip_mm`, `wind_spd_kmh`, … |
 | `data/interim/civic_days.parquet` | day | `date`, `is_holiday`, `is_parade`, `is_mega_event`, … |
 | `data/interim/events.parquet` | event | `event_id`, `name`, `start_local`, `end_local`, `lat`, `lon`, `area`, `road_close`, … |
+| `data/interim/collisions.parquet` | occurrence (route-matched) | `collision_id`, `route_id`, `dist_to_route_m`, `ts_local`, `lat`, `lon`, severity flags, … |
+| `data/interim/collisions_qa.json` | — | Match counts / rates for the collisions processing step |
 | `data/interim/routes.parquet` | route | `route_id`, `free_flow_s`, `length_m` |
 
 **Processed (main stats / ML table):**
 
 | File | Description |
 |---|---|
-| `data/processed/route_time_panel.parquet` | Joined route×time panel with weather (`wx_*`), civic flags, event counts, `delay_s`, calendar fields |
+| `data/processed/route_time_panel.parquet` | Joined route×time panel with weather (`wx_*`), civic flags, event counts, route×hour collision counts (`n_collisions`, …), `delay_s`, calendar fields |
 | `data/processed/route_time_panel_qa.json` | Row counts, year range, join match rates, null rates |
 | `data/processed/route_time_panel_v1.parquet` | Training panel: drops sparse weather + free-text names (`holiday_names`, `mega_event_names`); keeps calendar `is_weekend` and event id/kind/counts |
 | `data/processed/route_time_panel_v1_qa.json` | Columns dropped / retained for the v1 panel |

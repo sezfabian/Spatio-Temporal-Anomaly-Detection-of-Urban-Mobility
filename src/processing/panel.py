@@ -83,6 +83,75 @@ def build_event_day_summary(events: pd.DataFrame) -> pd.DataFrame:
     return summary
 
 
+def build_collision_route_hour_summary(collisions: pd.DataFrame) -> pd.DataFrame:
+    """Collapse route-matched collisions into per-(route, hour) counts.
+
+    Args:
+        collisions: Route-matched collisions with ``route_id``, ``ts_local``,
+            and severity flags. Rows without ``route_id`` are ignored.
+
+    Returns:
+        DataFrame keyed by ``route_id`` + ``ts_hour`` with collision counts and
+        the minimum snap distance in that bucket.
+    """
+    empty = pd.DataFrame(
+        columns=[
+            "route_id",
+            "ts_hour",
+            "n_collisions",
+            "n_injury_collisions",
+            "n_fatal_collisions",
+            "min_dist_to_route_m",
+        ]
+    )
+    if (
+        collisions.empty
+        or "ts_local" not in collisions.columns
+        or "route_id" not in collisions.columns
+    ):
+        return empty
+
+    frame = collisions.copy()
+    frame = frame.loc[frame["route_id"].notna()].copy()
+    if frame.empty:
+        return empty
+
+    frame["ts_local"] = _ensure_tz(pd.to_datetime(frame["ts_local"], utc=False))
+    frame = frame.loc[frame["ts_local"].notna()].copy()
+    if frame.empty:
+        return empty
+
+    frame["route_id"] = frame["route_id"].astype("string")
+    frame["ts_hour"] = floor_to_local_hour(frame["ts_local"])
+    if "is_injury" in frame.columns:
+        frame["is_injury_flag"] = frame["is_injury"].fillna(False).astype(bool)
+    else:
+        frame["is_injury_flag"] = False
+    if "fatalities" in frame.columns:
+        frame["is_fatal_flag"] = (
+            pd.to_numeric(frame["fatalities"], errors="coerce").fillna(0).gt(0)
+        )
+    else:
+        frame["is_fatal_flag"] = False
+    if "dist_to_route_m" in frame.columns:
+        frame["dist_to_route_m"] = pd.to_numeric(
+            frame["dist_to_route_m"], errors="coerce"
+        )
+    else:
+        frame["dist_to_route_m"] = pd.NA
+
+    count_col = "collision_id" if "collision_id" in frame.columns else "route_id"
+    summary = frame.groupby(["route_id", "ts_hour"], as_index=False).agg(
+        n_collisions=(count_col, "size"),
+        n_injury_collisions=("is_injury_flag", "sum"),
+        n_fatal_collisions=("is_fatal_flag", "sum"),
+        min_dist_to_route_m=("dist_to_route_m", "min"),
+    )
+    for col in ("n_collisions", "n_injury_collisions", "n_fatal_collisions"):
+        summary[col] = summary[col].astype("int64")
+    return summary
+
+
 def build_route_time_panel(
     interim_dir: Path = DEFAULT_INTERIM_DIR,
     processed_dir: Path = DEFAULT_PROCESSED_DIR,
@@ -104,6 +173,21 @@ def build_route_time_panel(
     weather = pd.read_parquet(interim_dir / "weather_hourly.parquet")
     civic = pd.read_parquet(interim_dir / "civic_days.parquet")
     events = pd.read_parquet(interim_dir / "events.parquet")
+    collisions_path = interim_dir / "collisions.parquet"
+    collisions = (
+        pd.read_parquet(collisions_path)
+        if collisions_path.exists()
+        else pd.DataFrame()
+    )
+    # Route matching is performed in ``--step collisions``. The panel only joins
+    # already-matched rows (those with ``route_id``).
+    if not collisions.empty and "route_id" not in collisions.columns:
+        raise ValueError(
+            "collisions.parquet is missing route_id. "
+            "Re-run: python -m src.processing --step collisions"
+        )
+    if not collisions.empty:
+        collisions = collisions.loc[collisions["route_id"].notna()].copy()
 
     if years is not None:
         travel = travel.loc[travel["year"].isin(years)].copy()
@@ -129,6 +213,11 @@ def build_route_time_panel(
     for col in ("n_events_active", "n_events_road_close", "n_events_with_coords"):
         panel[col] = panel[col].fillna(0).astype("int64")
 
+    collision_hours = build_collision_route_hour_summary(collisions)
+    panel = panel.merge(collision_hours, on=["route_id", "ts_hour"], how="left")
+    for col in ("n_collisions", "n_injury_collisions", "n_fatal_collisions"):
+        panel[col] = panel[col].fillna(0).astype("int64")
+
     panel["hour"] = panel["ts_local"].dt.hour.astype("int16")
     # Calendar weekday: Monday=0 … Sunday=6 (America/Toronto local date).
     panel["dow"] = panel["ts_local"].dt.dayofweek.astype("int16")
@@ -151,6 +240,7 @@ def build_route_time_panel(
         "civic_match_rate": float(panel["is_holiday"].notna().mean()) if "is_holiday" in panel else 0.0,
         "routes_match_rate": float(panel["length_m"].notna().mean()) if "length_m" in panel else 0.0,
         "event_days_with_exposure": int((panel["n_events_active"] > 0).sum()),
+        "collision_route_hours_with_exposure": int((panel["n_collisions"] > 0).sum()),
         "null_travel_time_rate": float(panel["travel_time_s"].isna().mean()) if len(panel) else 0.0,
     }
     qa_path = processed_dir / "route_time_panel_qa.json"

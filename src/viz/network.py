@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import io
-import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -12,17 +10,14 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
-import shapefile
 from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 
-from src.processing.paths import DEFAULT_PROCESSED_DIR, DEFAULT_RAW_DIR
+from src.processing.paths import DEFAULT_PROCESSED_DIR
+from src.processing.routes import DEFAULT_ROUTES_ZIP, load_route_geometries
 
 DEFAULT_PANEL = DEFAULT_PROCESSED_DIR / "route_time_panel.parquet"
-DEFAULT_ROUTES_ZIP = (
-    DEFAULT_RAW_DIR / "travel_times_bluetooth" / "bluetooth-routes-wgs84.zip"
-)
 
 BASEMAP_STYLES = ("positron", "voyager", "streets", "dark")
 
@@ -66,38 +61,6 @@ def aggregate_route_metrics(
     out["source"] = ends.map(lambda x: x[0])
     out["target"] = ends.map(lambda x: x[1])
     return out
-
-
-def load_route_geometries(routes_zip: Path) -> dict[str, list[tuple[float, float]]]:
-    """Load WGS84 polyline coordinates keyed by ``route_id``."""
-    with zipfile.ZipFile(routes_zip) as archive:
-        names = {
-            Path(name).suffix.lower(): name
-            for name in archive.namelist()
-            if Path(name).suffix.lower() in {".shp", ".dbf", ".shx"}
-            and "__macosx" not in name.lower()
-            and not Path(name).name.startswith("._")
-        }
-        missing = {ext for ext in (".shp", ".dbf", ".shx") if ext not in names}
-        if missing:
-            raise FileNotFoundError(f"Routes ZIP missing members: {sorted(missing)}")
-        shp = io.BytesIO(archive.read(names[".shp"]))
-        dbf = io.BytesIO(archive.read(names[".dbf"]))
-        shx = io.BytesIO(archive.read(names[".shx"]))
-
-    reader = shapefile.Reader(shp=shp, dbf=dbf, shx=shx)
-    field_names = [field[0] for field in reader.fields[1:]]
-    if "resultId" not in field_names:
-        raise KeyError("Shapefile DBF missing resultId field")
-    id_idx = field_names.index("resultId")
-
-    geometries: dict[str, list[tuple[float, float]]] = {}
-    for shape_rec in reader.iterShapeRecords():
-        route_id = str(shape_rec.record[id_idx]).strip()
-        points = [(float(x), float(y)) for x, y in shape_rec.shape.points]
-        if points:
-            geometries[route_id] = points
-    return geometries
 
 
 def build_route_graph(

@@ -2,13 +2,58 @@
 
 from __future__ import annotations
 
+import io
 import struct
 import zipfile
 from pathlib import Path
 
 import pandas as pd
+import shapefile
 
 from src.processing.paths import DEFAULT_INTERIM_DIR, DEFAULT_RAW_DIR
+
+DEFAULT_ROUTES_ZIP = (
+    DEFAULT_RAW_DIR / "travel_times_bluetooth" / "bluetooth-routes-wgs84.zip"
+)
+
+
+def load_route_geometries(routes_zip: Path) -> dict[str, list[tuple[float, float]]]:
+    """Load WGS84 polyline coordinates keyed by ``route_id``.
+
+    Args:
+        routes_zip: Path to ``bluetooth-routes-wgs84.zip``.
+
+    Returns:
+        Mapping of ``route_id`` -> list of ``(lon, lat)`` vertices.
+    """
+    with zipfile.ZipFile(routes_zip) as archive:
+        names = {
+            Path(name).suffix.lower(): name
+            for name in archive.namelist()
+            if Path(name).suffix.lower() in {".shp", ".dbf", ".shx"}
+            and "__macosx" not in name.lower()
+            and not Path(name).name.startswith("._")
+        }
+        missing = {ext for ext in (".shp", ".dbf", ".shx") if ext not in names}
+        if missing:
+            raise FileNotFoundError(f"Routes ZIP missing members: {sorted(missing)}")
+        shp = io.BytesIO(archive.read(names[".shp"]))
+        dbf = io.BytesIO(archive.read(names[".dbf"]))
+        shx = io.BytesIO(archive.read(names[".shx"]))
+
+    reader = shapefile.Reader(shp=shp, dbf=dbf, shx=shx)
+    field_names = [field[0] for field in reader.fields[1:]]
+    if "resultId" not in field_names:
+        raise KeyError("Shapefile DBF missing resultId field")
+    id_idx = field_names.index("resultId")
+
+    geometries: dict[str, list[tuple[float, float]]] = {}
+    for shape_rec in reader.iterShapeRecords():
+        route_id = str(shape_rec.record[id_idx]).strip()
+        points = [(float(x), float(y)) for x, y in shape_rec.shape.points]
+        if points:
+            geometries[route_id] = points
+    return geometries
 
 
 def _read_dbf_records(data: bytes) -> pd.DataFrame:
@@ -112,7 +157,7 @@ def normalize_routes(
     Returns:
         Path to written Parquet file.
     """
-    zip_path = raw_dir / "travel_times_bluetooth" / "bluetooth-routes-wgs84.zip"
+    zip_path = raw_dir / "travel_times_bluetooth" / DEFAULT_ROUTES_ZIP.name
     if not zip_path.exists():
         raise FileNotFoundError(f"Routes ZIP not found: {zip_path}")
     table = read_routes_zip(zip_path)

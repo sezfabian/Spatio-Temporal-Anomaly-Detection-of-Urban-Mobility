@@ -9,6 +9,10 @@ from pathlib import Path
 
 from src.processing.civic import normalize_civic_days
 from src.processing.clean_panel import clean_panel_for_v1
+from src.processing.collisions import (
+    DEFAULT_MAX_MATCH_DISTANCE_M,
+    normalize_collisions,
+)
 from src.processing.events import normalize_events
 from src.processing.panel import build_route_time_panel
 from src.processing.paths import DEFAULT_INTERIM_DIR, DEFAULT_PROCESSED_DIR, DEFAULT_RAW_DIR
@@ -22,6 +26,7 @@ STEPS = (
     "civic",
     "events",
     "routes",
+    "collisions",
     "panel",
     "panel_v1",
     "all",
@@ -47,7 +52,16 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         type=int,
         dest="years",
-        help="Optional travel-time year filter (repeatable). Also applied to panel.",
+        help="Optional travel-time / collision year filter (repeatable). Also applied to panel.",
+    )
+    parser.add_argument(
+        "--max-match-distance-m",
+        type=float,
+        default=DEFAULT_MAX_MATCH_DISTANCE_M,
+        help=(
+            "Max distance (meters) when snapping collisions to Bluetooth routes "
+            f"(default: {DEFAULT_MAX_MATCH_DISTANCE_M:g}). Used by --step collisions."
+        ),
     )
     return parser
 
@@ -74,6 +88,18 @@ def run_step(step: str, args: argparse.Namespace) -> int:
         path = normalize_routes(args.raw_dir, args.interim_dir)
         print(f"wrote\t{path}")
         return 0
+    if step == "collisions":
+        # Parses CSV, drops unlocated points, snaps to nearest Bluetooth route,
+        # and discards collisions farther than --max-match-distance-m.
+        kwargs: dict = {
+            "max_distance_m": args.max_match_distance_m,
+        }
+        if args.years:
+            kwargs["years"] = args.years
+        path, qa = normalize_collisions(args.raw_dir, args.interim_dir, **kwargs)
+        print(f"wrote\t{path}")
+        print(json.dumps(qa, indent=2))
+        return 0
     if step == "panel":
         path, qa = build_route_time_panel(
             args.interim_dir,
@@ -99,6 +125,7 @@ def run_step(step: str, args: argparse.Namespace) -> int:
             "civic",
             "events",
             "routes",
+            "collisions",
             "panel",
             "panel_v1",
         ):

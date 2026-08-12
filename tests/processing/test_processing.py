@@ -12,9 +12,15 @@ import pytest
 import yaml
 
 from src.processing.civic import normalize_civic_days
+from src.processing.collisions import (
+    match_collisions_to_routes,
+    normalize_collisions,
+    parse_collisions_csv,
+)
 from src.processing.events import normalize_events, parse_festivals_xml
 from src.processing.clean_panel import clean_panel_for_v1, columns_to_drop
 from src.processing.panel import (
+    build_collision_route_hour_summary,
     build_event_day_summary,
     build_route_time_panel,
     floor_to_local_hour,
@@ -260,6 +266,126 @@ def test_build_event_day_summary() -> None:
     assert summary.iloc[0]["n_events_road_close"] == 1
 
 
+def test_parse_collisions_csv(tmp_path: Path) -> None:
+    csv = tmp_path / "collisions.csv"
+    csv.write_text(
+        "_id,OCC_DATE,OCC_MONTH,OCC_DOW,OCC_YEAR,OCC_HOUR,DIVISION,"
+        "FATALITIES,INJURY_COLLISIONS,FTR_COLLISIONS,PD_COLLISIONS,"
+        "HOOD_158,NEIGHBOURHOOD_158,LONG_WGS84,LAT_WGS84,"
+        "AUTOMOBILE,MOTORCYCLE,PASSENGER,BICYCLE,PEDESTRIAN\n"
+        "1,1388552400000,January,Wednesday,2014,15,D43,,"
+        "NO,NO,YES,133,Centennial Scarborough (133),"
+        "-79.17246,43.78218,YES,NO,NO,NO,NO\n"
+        "2,1388552400000,January,Wednesday,2014,11,NSA,,"
+        "YES,NO,NO,NSA,NSA,0,0,YES,NO,NO,NO,NO\n"
+        "3,1514782800000,January,Monday,2018,9,D51,1,"
+        "YES,NO,NO,075,Church-Yonge Corridor (75),"
+        "-79.378,43.661,YES,NO,NO,NO,YES\n",
+        encoding="utf-8",
+    )
+    frame = parse_collisions_csv(csv, years=(2014, 2015, 2016, 2017))
+    # Year filter drops 2018; missing/(0,0) coords are dropped.
+    assert len(frame) == 1
+    assert frame.iloc[0]["hour"] == 15
+    assert bool(frame.iloc[0]["is_pd"]) is True
+    assert pd.notna(frame.iloc[0]["lat"])
+    assert str(frame["ts_local"].dt.tz) == "America/Toronto"
+    assert frame.iloc[0]["ts_local"].date().isoformat() == "2014-01-01"
+
+
+def test_match_collisions_to_routes_keeps_nearby_only() -> None:
+    # Short east-west corridor near downtown Toronto.
+    geometries = {
+        "A_B": [(-79.4000, 43.6500), (-79.3900, 43.6500)],
+        "B_A": [(-79.3900, 43.6500), (-79.4000, 43.6500)],
+    }
+    collisions = pd.DataFrame(
+        {
+            "collision_id": [1, 2, 3],
+            "lat": [43.6501, 43.70, None],
+            "lon": [-79.3950, -79.3950, None],
+            "ts_local": pd.to_datetime(
+                ["2017-01-01 00:00:00"] * 3
+            ).tz_localize("America/Toronto"),
+        }
+    )
+    matched = match_collisions_to_routes(collisions, geometries, max_distance_m=150.0)
+    assert len(matched) == 1
+    assert matched.iloc[0]["collision_id"] == 1
+    assert matched.iloc[0]["route_id"] in {"A_B", "B_A"}
+    assert float(matched.iloc[0]["dist_to_route_m"]) < 50.0
+
+
+def test_normalize_collisions(tmp_path: Path) -> None:
+    raw = tmp_path / "raw" / "traffic_collisions"
+    routes = tmp_path / "raw" / "travel_times_bluetooth"
+    raw.mkdir(parents=True)
+    routes.mkdir(parents=True)
+
+    # Reuse the real routes ZIP when available; otherwise skip spatial snap via tiny zip.
+    from shutil import copyfile
+
+    repo_zip = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "raw"
+        / "travel_times_bluetooth"
+        / "bluetooth-routes-wgs84.zip"
+    )
+    if not repo_zip.exists():
+        pytest.skip("bluetooth-routes-wgs84.zip not available")
+    copyfile(repo_zip, routes / "bluetooth-routes-wgs84.zip")
+
+    csv = raw / "Traffic Collisions - 4326.csv"
+    # Point on / near corridor B_A first vertex (~-79.4935, 43.6247).
+    csv.write_text(
+        "_id,OCC_DATE,OCC_MONTH,OCC_DOW,OCC_YEAR,OCC_HOUR,DIVISION,"
+        "FATALITIES,INJURY_COLLISIONS,FTR_COLLISIONS,PD_COLLISIONS,"
+        "HOOD_158,NEIGHBOURHOOD_158,LONG_WGS84,LAT_WGS84,"
+        "AUTOMOBILE,MOTORCYCLE,PASSENGER,BICYCLE,PEDESTRIAN\n"
+        "10,1483246800000,January,Sunday,2017,0,D52,,"
+        "NO,NO,YES,078,Kensington-Chinatown (78),"
+        "-79.4935,43.6247,YES,NO,NO,NO,NO\n"
+        "11,1483246800000,January,Sunday,2017,1,NSA,,"
+        "NO,NO,YES,NSA,NSA,0,0,YES,NO,NO,NO,NO\n",
+        encoding="utf-8",
+    )
+    out, qa = normalize_collisions(tmp_path / "raw", tmp_path / "interim")
+    table = pd.read_parquet(out)
+    assert len(table) == 1
+    assert int(table.iloc[0]["year"]) == 2017
+    assert pd.notna(table.iloc[0]["route_id"])
+    assert float(table.iloc[0]["dist_to_route_m"]) <= 150.0
+    assert qa["n_route_matched"] == 1
+    assert qa["n_with_coords"] == 1
+    assert (tmp_path / "interim" / "collisions_qa.json").exists()
+
+
+def test_build_collision_route_hour_summary() -> None:
+    collisions = pd.DataFrame(
+        {
+            "collision_id": [1, 2, 3],
+            "route_id": ["J_I", "J_I", "A_B"],
+            "ts_local": pd.to_datetime(
+                [
+                    "2017-01-01 00:15:00",
+                    "2017-01-01 00:45:00",
+                    "2017-01-01 00:20:00",
+                ]
+            ).tz_localize("America/Toronto"),
+            "is_injury": [True, False, False],
+            "fatalities": [0, 1, 0],
+            "dist_to_route_m": [12.0, 40.0, 8.0],
+        }
+    )
+    summary = build_collision_route_hour_summary(collisions)
+    ji = summary.loc[summary["route_id"] == "J_I"].iloc[0]
+    assert int(ji["n_collisions"]) == 2
+    assert int(ji["n_injury_collisions"]) == 1
+    assert int(ji["n_fatal_collisions"]) == 1
+    assert float(ji["min_dist_to_route_m"]) == pytest.approx(12.0)
+
+
 def test_build_route_time_panel(tmp_path: Path) -> None:
     interim = tmp_path / "interim"
     processed = tmp_path / "processed"
@@ -317,20 +443,40 @@ def test_build_route_time_panel(tmp_path: Path) -> None:
             "lon": [-79.38],
         }
     )
+    collisions = pd.DataFrame(
+        {
+            "collision_id": [1],
+            "route_id": ["J_I"],
+            "ts_local": pd.to_datetime(["2017-01-01 00:20:00"]).tz_localize(
+                "America/Toronto"
+            ),
+            "lat": [43.65],
+            "lon": [-79.38],
+            "is_injury": [True],
+            "fatalities": [0],
+            "dist_to_route_m": [25.0],
+        }
+    )
 
     travel.to_parquet(interim / "travel_times.parquet", index=False)
     routes.to_parquet(interim / "routes.parquet", index=False)
     weather.to_parquet(interim / "weather_hourly.parquet", index=False)
     civic.to_parquet(interim / "civic_days.parquet", index=False)
     events.to_parquet(interim / "events.parquet", index=False)
+    collisions.to_parquet(interim / "collisions.parquet", index=False)
 
     out, qa = build_route_time_panel(interim, processed, years=[2017])
     panel = pd.read_parquet(out)
     assert len(panel) == 2
     assert "wx_temp_c" in panel.columns
     assert "delay_s" in panel.columns
+    assert "n_collisions" in panel.columns
+    assert int(panel.loc[panel["hour"] == 0, "n_collisions"].iloc[0]) == 1
+    assert float(panel.loc[panel["hour"] == 0, "min_dist_to_route_m"].iloc[0]) == 25.0
+    assert int(panel.loc[panel["hour"] == 1, "n_collisions"].iloc[0]) == 0
     assert qa["n_rows"] == 2
     assert qa["weather_match_rate"] == 1.0
+    assert qa["collision_route_hours_with_exposure"] == 1
 
 
 def test_columns_to_drop_v1() -> None:

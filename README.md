@@ -65,6 +65,8 @@ src/
   features/                      # civic calendar feature helpers
   processing/                    # raw → interim → processed
 tests/
+notebooks/
+  st_gae_anomaly_detection.ipynb # Colab: train ST-GAE + score held-out year
 data/
   raw/                           # ingested files (not committed)
   interim/                       # tidy Parquet tables
@@ -324,7 +326,102 @@ print(panel.columns.tolist())
 print(panel.head())
 ```
 
-### Visualize on a Toronto map
+---
+
+## Train and evaluate in Colab
+
+The modelling notebook is Colab-first. It does **not** read `data/processed/` from this repo at runtime. You build the v1 panel locally, copy it to Google Drive, then train and score on a Colab GPU.
+
+Open it from GitHub:
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sezfabian/Spatio-Temporal-Anomaly-Detection-of-Urban-Mobility/blob/main/notebooks/st_gae_anomaly_detection.ipynb)
+
+Or in Colab: **File → Open notebook → GitHub** → this repository → `notebooks/st_gae_anomaly_detection.ipynb`.
+
+### 1) Build and upload the panel
+
+```bash
+python -m src.processing --step panel_v1
+```
+
+Upload `data/processed/route_time_panel_v1.parquet` to Drive as:
+
+```text
+MyDrive/Dissertation/route_time_panel_v1.parquet
+```
+
+Colab sees that path as `/content/drive/MyDrive/Dissertation/route_time_panel_v1.parquet` (`STGAEConfig.panel_path`). Checkpoints and QA files are written under `MyDrive/Dissertation/artifacts/st_gae/`.
+
+If you use a different Drive folder, change `DRIVE_ROOT` in the **Environment and configuration** cell before mounting.
+
+### 2) Runtime
+
+1. **Runtime → Change runtime type → T4 GPU** (or any CUDA GPU). CPU works but scoring a full eval year is slow.
+2. Run **all cells from the top** the first time. Later cells assume `CFG`, the cleaned panel, tensors, `edge_index`, and `model` already exist in memory.
+3. When Colab asks, grant Drive access in **§2 Mount Google Drive**.
+
+| Notebook section | What it does |
+|---|---|
+| **0** Colab dependency install | `pip install` pandas, torch, torch-geometric, … |
+| **1** Environment and configuration | `STGAEConfig` (paths, years, window, mask thresholds, features) |
+| **2** Mount Drive and load panel | `drive.mount`, read parquet, create `artifacts/st_gae/` |
+| **3–5** Clean, normative mask, year split | Observation flags, `is_normal`, train 2016 / eval 2017 (defaults) |
+| **6–8** Tensors, graph, windows | \(X \in \mathbb{R}^{T \times N \times D}\), head–tail `edge_index`, 60‑min windows |
+| **9–10** Architecture + train | GCN + GRU autoencoder; masked MSE on normal ∩ observed |
+| **11–16** Evaluate | Reconstruction scores \(S_{i,t}\), PR-AUC, zone recall, FAR, upstream/downstream traces |
+
+Defaults: `train_years=(2016,)`, `eval_years=(2017,)`, `window_size=12` (60 minutes), `epochs=30`, `hidden_dim=64`. Edit them only in the **§1** dataclass, then re-run from **§1** downward.
+
+### 3) Train
+
+Run through **§10 Train with masked reconstruction MSE**.
+
+- The loss is masked MSE on healthy, observed cells only. Collisions are **not** training labels.
+- After each epoch the notebook writes `st_gae_checkpoint.pt` (latest, for resume). If held-out masked MSE improves, it also writes `st_gae_best.pt`. Every 5 epochs (and the last epoch) it writes `st_gae_epoch_XX.pt`.
+- If a compatible checkpoint is already on Drive, **§10 resumes** instead of starting from scratch. If `epochs` is already reached, it prints that the training loop is skipped.
+
+After a **runtime disconnect or reset**, re-run **§0 through §9** (rebuild tensors in RAM), then **§10**. Training will pick up from Drive. Do not jump straight to **§11**: scoring uses the in-memory `model`, `X_eval`, and graph.
+
+Resume is skipped (and training starts over) if `hidden_dim`, `feature_cols`, or `route_id` order do not match the checkpoint.
+
+### 4) Evaluate
+
+With a trained `model` in memory, run **§11–§16** in order:
+
+| Section | What you should see |
+|---|---|
+| **11** Continuous anomaly scoring | `anomaly_score` on the 2017 eval year |
+| **12** Baseline reconstruction | RMSE on healthy, observed eval windows (seconds) |
+| **13** Localized detection | Exact-corridor vs 1-hop vs ordinary flow; localized PR-AUC |
+| **14** Zone localization | Top-K recall in a 60-minute window around logged collisions |
+| **15** False alarm rate | Sustained alerts that do not match a snapped collision |
+| **16** Network effects | Upstream vs downstream score traces around severe collisions |
+
+Plots render in the notebook. Weights and preprocessing artifacts stay on Drive (see below).
+
+### 5) Artifacts on Drive
+
+Written under `MyDrive/Dissertation/artifacts/st_gae/`:
+
+| File | Role |
+|---|---|
+| `cleaning_qa.json` | Split sizes, normal rates, mask settings |
+| `scaler.pkl` | Train-only `StandardScaler` (no eval leakage) |
+| `tensor_meta.json` | `route_ids`, feature lists, years, window size |
+| `edge_index.pt` | Physical head–tail corridor graph |
+| `st_gae_checkpoint.pt` | Latest epoch (resume after a Colab timeout) |
+| `st_gae_best.pt` | Best held-out masked MSE |
+| `st_gae_epoch_XX.pt` | Periodic snapshots |
+
+### Notes
+
+- The notebook imports `google.colab.drive`; it is not a local Jupyter workflow unless you replace the mount cell and point `DRIVE_ROOT` at a local folder.
+- Keep the v1 parquet on Drive; Colab disk is wiped when the runtime dies, Drive is not.
+- A full 2014–2017 panel is large. The default split trains on 2016 and scores 2017; both years must be present in the uploaded parquet.
+
+---
+
+## Visualize on a Toronto map
 
 **Static map** — corridors on a street basemap, colored by an aggregated panel metric:
 
@@ -373,7 +470,9 @@ fig.show()  # browser: Play/Pause, time slider, scroll-zoom, drag-pan
 
 Basemap tiles need network access the first time (cached afterward). Use `--no-basemap` on the static CLI offline.
 
-### Adding processing for a new source
+---
+
+## Adding processing for a new source
 
 1. Ingest it to `data/raw/...` (see above).
 2. Add a normalizer under `src/processing/` that writes a tidy Parquet to `data/interim/`.
